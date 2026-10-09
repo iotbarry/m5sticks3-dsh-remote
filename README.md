@@ -127,6 +127,11 @@ USB 串行设备 (COMx)       ← 串口(供桥接脚本使用)
 powershell -ExecutionPolicy Bypass -File "pc\dsh-cdp-bridge.ps1"
 ```
 
+> ⚠️ **`-ExecutionPolicy Bypass` 不是可选项,是必须的。** 脚本没有数字签名,
+> 而 Windows 默认策略是 `RemoteSigned`,直接 `& .\dsh-cdp-bridge.ps1` 会报
+> 「未对文件进行数字签名。无法在当前系统上运行该脚本」。
+> 详见下面的[第 9 个坑](#9-windows-执行策略会拦截未签名的-ps1)。
+
 看到这样的输出就说明连接成功:
 
 ```
@@ -270,6 +275,37 @@ ESP32-S3 的 `rst:0x15 (USB_UART_CHIP_RESET)` 会让芯片进入下载模式 —
 ### 8. 烧录前要先关掉桥接脚本
 
 桥接会一直占着串口,esptool 打不开端口 → `OSError 22 / PermissionError`。
+
+### 9. Windows 执行策略会拦截未签名的 PS1
+
+直接运行桥接脚本时:
+
+```
+& : 无法加载文件 E:\...\pc\dsh-cdp-bridge.ps1。未对文件进行数字签名。
+无法在当前系统上运行该脚本。
+    + FullyQualifiedErrorId : UnauthorizedAccess
+```
+
+原因:执行策略是 **`RemoteSigned`**(用 `Get-ExecutionPolicy -List` 查看),
+它要求**从网络下载的**脚本必须有数字签名。注意:即使文件**没有** `Zone.Identifier`
+标记(用 `Get-Item <file> -Stream Zone.Identifier` 可查),在非系统盘、
+同步盘或某些企业策略下,PowerShell 仍可能把它判定为"来自远程"。
+
+**三种放行方式**,按推荐顺序:
+
+```powershell
+# 方式一(推荐):只为这一次调用放行,完全不动系统设置
+powershell -ExecutionPolicy Bypass -File "pc\dsh-cdp-bridge.ps1"
+
+# 方式二:给单个文件解锁(之后可直接 & 运行)
+Unblock-File .\pc\dsh-cdp-bridge.ps1
+
+# 方式三:只在当前会话进程内放行(想在已有 pwsh 里 & 运行脚本时用)
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+```
+
+> ❌ **不要**用 `Set-ExecutionPolicy LocalMachine Unrestricted` —— 那会全局降低
+> 系统安全性,得不偿失。
 
 ---
 

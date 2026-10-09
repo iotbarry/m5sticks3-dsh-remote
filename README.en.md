@@ -96,6 +96,10 @@ Window` placeholder is exposed), so the DevTools protocol is the only way in.
 powershell -ExecutionPolicy Bypass -File "pc\dsh-cdp-bridge.ps1"
 ```
 
+> ⚠️ **`-ExecutionPolicy Bypass` is not optional.** The script is unsigned and Windows
+> defaults to `RemoteSigned`, so a plain `& .\dsh-cdp-bridge.ps1` fails with
+> "not digitally signed / cannot be loaded". See trap 9 below.
+
 ```
 remote serial port : COM13
 DSH debug port     : 9222
@@ -147,6 +151,20 @@ Then: **side click → speak → side click → front click to send.**
 
 8. **Stop the bridge before flashing** — it holds the serial port and esptool then
    fails with `OSError 22`.
+
+9. **Windows execution policy blocks the unsigned `.ps1`.** The default `RemoteSigned`
+   rejects scripts it considers remote, and a file can be treated as remote even
+   **without** a `Zone.Identifier` mark — for example on a non-system or synced drive.
+   Fixes, in order of preference:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File "pc\dsh-cdp-bridge.ps1"   # this call only
+   Unblock-File .\pc\dsh-cdp-bridge.ps1                               # this file only
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force  # this process only
+   ```
+
+   Do **not** use `Set-ExecutionPolicy LocalMachine Unrestricted` — it weakens the
+   whole machine for no good reason.
 
 ---
 
