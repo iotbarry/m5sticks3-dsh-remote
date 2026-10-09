@@ -9,7 +9,8 @@
 //
 //  front button  single click -> Enter        (send / allow)
 //                double click -> Esc          (reject / cancel)
-//  side  button  single click -> Ctrl+Alt+R   (DSH voice recording)
+//  side  button  hold         -> Ctrl+Alt+R   (start DSH voice recording)
+//                release      -> Ctrl+Alt+R   (stop and transcribe)
 //                this is GPIO 12, and a hardware long press puts the chip in
 //                ROM download mode
 //
@@ -64,7 +65,11 @@ static uint32_t lastClickMs = 0;
 static const int PIN_SIDE      = 12;
 static int       sideIdleLevel = HIGH;
 static bool      sideDown      = false;
+static bool      sideRecording = false;   // 已按住超过阈值,正在录音
 static uint32_t  sideDownMs    = 0;
+
+// 按住多久才算"开始录音":太短容易误触,太长会漏掉开头
+static const uint32_t SIDE_HOLD_MS = 250;
 
 static int      flashCard   = -1;
 static uint32_t flashUntil  = 0;
@@ -234,6 +239,13 @@ static void drawPulse() {
     int r0 = r1 - 2;
     if (r0 < 1) r0 = 1;
     M5.Display.fillArc(CX, DOT_Y, r0, r1, 0, 360, col);
+  } else if (sideRecording) {
+    // 按住录音中:红色光环常亮,轻微呼吸
+    int phase = (int)((now / 30) % 60);
+    int p     = (phase < 30 ? phase : 60 - phase);
+    int halo  = 7 + p / 10;
+    M5.Display.fillSmoothCircle(CX, DOT_Y, halo, lerp565(C_RED, C_BG, 0.75f));
+    M5.Display.fillSmoothCircle(CX, DOT_Y, 4, C_RED);
   } else if (view == VIEW_IDLE) {
     int phase = (int)((now / 45) % 72);
     int p     = (phase < 36 ? phase : 72 - phase);
@@ -281,17 +293,26 @@ void loop() {
 
   pollSerial();
 
-  // ---- right-side button on GPIO 12: one click asks DSH for voice input ----
-  // Download mode comes from the hardware long press of this same key, so the
-  // firmware no longer arms a software hatch.
+  // ---- 右侧按键(GPIO12):按住说话 ----
+  //   按住达到 SIDE_HOLD_MS  -> 发 Ctrl+Alt+R,DSH 开始录音
+  //   松开                   -> 再发一次,停止录音并转写
+  //   轻点(不到阈值)         -> 什么都不做,避免误触
+  // 下载模式仍由这个键的硬件长按提供,固件不再自己开下载模式。
   {
     bool pressed = (digitalRead(PIN_SIDE) != sideIdleLevel);
     if (pressed && !sideDown) {
-      sideDown   = true;
-      sideDownMs = now;
+      sideDown      = true;
+      sideDownMs    = now;
+      sideRecording = false;
+    } else if (pressed && sideDown && !sideRecording && now - sideDownMs >= SIDE_HOLD_MS) {
+      sideRecording = true;
+      doAction(ACT_VOICE);                       // 开始录音
     } else if (!pressed && sideDown) {
       sideDown = false;
-      if (now - sideDownMs < 800) doAction(ACT_VOICE);
+      if (sideRecording) {
+        sideRecording = false;
+        doAction(ACT_VOICE);                     // 结束录音并转写
+      }
     }
   }
 
