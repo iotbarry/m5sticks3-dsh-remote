@@ -2,11 +2,13 @@
 # ---------------------------------------------------------------------------
 #  Bridges DeepSeek Harness and the M5StickC S3 USB remote.
 #
-#  1) approval prompts  ->  the remote shows 确认 / 拒绝
+#  1) approval prompts  ->  the remote shows its two answer pills
 #  2) remote keys       ->  Enter confirms, Escape rejects, even though DSH's
 #                           approval card gives its buttons no keyboard focus
 #  3) Ctrl+Alt+R        ->  starts / stops DSH's own voice recorder, which keeps
 #                           the editor state in sync (Windows dictation does not)
+#  4) Backspace         ->  if the caret is elsewhere, focus the composer first
+#                           and then delete one character
 #
 #  DSH is an Electron app whose web content is invisible to Windows UI
 #  Automation, so this talks to the Chromium DevTools protocol instead.
@@ -122,17 +124,18 @@ function Eval-Js([string]$expr) {
 # if it is missing (also re-installs itself after a page reload), and it reports
 # whether an approval prompt is on screen.
 $JS_DETECT = "(() => {
-  if (window.__dshBridgeVer !== 12) {
+  if (window.__dshBridgeVer !== 13) {
     if (window.__dshBridgeFn) document.removeEventListener('keydown', window.__dshBridgeFn, true);
-    window.__dshBridgeVer = 12;
+    window.__dshBridgeVer = 13;
     window.__dshBridgeFn = function(e){
       // The board can deliver one press as several keydown events, arriving
       // within a few milliseconds. Debounce only AFTER a branch has matched,
       // otherwise the modifier keydowns of a chord eat the real key's slot.
+      // Kept short (80 ms) so rapid taps still register one by one.
       const now = Date.now();
       window.__dshLastKey = window.__dshLastKey || {};
       const fresh = function(tag){
-        if (now - (window.__dshLastKey[tag] || 0) < 150) return false;
+        if (now - (window.__dshLastKey[tag] || 0) < 80) return false;
         window.__dshLastKey[tag] = now;
         return true;
       };
@@ -145,7 +148,7 @@ $JS_DETECT = "(() => {
         if (rb) { rb.click(); e.preventDefault(); e.stopPropagation(); }
         return;
       }
-      if (e.key !== 'Enter' && e.key !== 'Escape') return;
+      if (e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace') return;
       if (!fresh(e.key)) return;
       const els = [...document.querySelectorAll(`"$SELECTOR`")];
       const items = els.map(function(el){ return {el:el, t:(el.innerText||el.textContent||'').trim()}; })
@@ -168,6 +171,27 @@ $JS_DETECT = "(() => {
             return /\u53d1\u9001/.test(t) && !/\u505c\u6b62/.test(t) && (b.offsetWidth || b.offsetHeight);
           });
           if (sb) { sb.click(); e.preventDefault(); e.stopPropagation(); }
+        }
+      }
+      // Same for Backspace: when the caret is not inside any editable field,
+      // move it to the end of the composer first, then delete one character,
+      // so a side-key tap works even if the user never clicked the composer.
+      if (e.key === 'Backspace') {
+        const comp = document.querySelector('.RlGAzG_input');
+        const ae = document.activeElement;
+        const inEditable = !!(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable));
+        if (comp && !inEditable) {
+          comp.focus();
+          try {
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(comp);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          } catch (err) { /* ignore */ }
+          document.execCommand('delete', false, null);
+          e.preventDefault(); e.stopPropagation();
         }
       }
     };
