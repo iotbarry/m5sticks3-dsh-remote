@@ -3,7 +3,7 @@
 Turn an **M5StickC S3** into a physical remote for DeepSeek Harness (DSH).
 
 - **USB HID keyboard** — no drivers, works out of the box
-- **One click / double click / hold the side key** → send, reject, push-to-talk
+- **Front click / double click** → send, reject; **hold the side key** → talk; **tap it** → delete
 - **The screen switches by itself** when DSH asks for approval — otherwise it just
   shows a name, with nothing else on screen
 - **Drives DSH's own voice recorder**, so the transcript really lands in the editor
@@ -39,13 +39,15 @@ Turn an **M5StickC S3** into a physical remote for DeepSeek Harness (DSH).
 |---|---|---|
 | Front button, **one click** | `Enter` | send message / allow |
 | Front button, **double click** | `Esc` | reject / cancel |
-| Side button, **hold** | `Ctrl+Alt+R` | **start** DSH voice recording |
+| Side button, **tap** | `Backspace` | **delete one character** |
+| Side button, **hold ≥0.25 s** | `Ctrl+Alt+R` | **start** DSH voice recording |
 | Side button, **release** | `Ctrl+Alt+R` | **stop** and transcribe |
 | Side button, **long press** | hardware | ROM download mode (for flashing) |
 | Side button, **double click** | hardware | power off |
 
 A single click is decided after **280 ms** so it can be told apart from a double click.
-The side key starts recording once held for **250 ms** — a shorter tap does nothing.
+On the side key, holding **250 ms** starts recording; letting go before that counts as a
+tap and sends `Backspace`.
 
 ## Screen
 
@@ -189,6 +191,7 @@ m5sticks3_usbkbd/
 - Single click costs **280 ms** so it can be separated from a double click.
 - The side key must be held **250 ms** before recording starts, and recording ends the
   moment you let go — so do not rush the first word.
+- A quick **tap** on the side key sends `Backspace`; only a **hold** starts recording.
 - The bridge must be running for automatic view switching and key forwarding. The
   remote still types without it — the screen just stays on the name.
 - Restart the bridge after restarting DSH (it reinstalls its in-page key mapping).

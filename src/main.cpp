@@ -9,7 +9,8 @@
 //
 //  front button  single click -> Enter        (send / allow)
 //                double click -> Esc          (reject / cancel)
-//  side  button  hold         -> Ctrl+Alt+R   (start DSH voice recording)
+//  side  button  tap          -> Backspace    (delete one character)
+//                hold         -> Ctrl+Alt+R   (start DSH voice recording)
 //                release      -> Ctrl+Alt+R   (stop and transcribe)
 //                this is GPIO 12, and a hardware long press puts the chip in
 //                ROM download mode
@@ -41,6 +42,7 @@ static const uint16_t C_GLOW  = 0x18E4;   // #1A1D22  drop shadow
 static const uint16_t C_GREEN = 0x3693;   // #34D399  emerald
 static const uint16_t C_RED   = 0xFB8E;   // #F87171  soft red
 static const uint16_t C_BLUE  = 0x651F;   // #60A5FA  sky
+static const uint16_t C_AMBER = 0xFD20;   // #FFA500  amber(侧键轻点回删的提示色)
 
 #define TITLE_TEXT "程序猿白瑞"
 
@@ -49,7 +51,7 @@ static const int TITLE_PX    = 32;        // Mincho cap size
 static const int TITLE_TRACK = 6;         // extra letter spacing
 static const int TITLE_Y     = 32;
 
-enum { ACT_CONFIRM, ACT_REJECT, ACT_VOICE };
+enum { ACT_CONFIRM, ACT_REJECT, ACT_VOICE, ACT_BACKSPACE };
 enum { VIEW_IDLE, VIEW_APPROVAL };
 
 // ------------------------------------------------------------------ state ---
@@ -135,6 +137,8 @@ static void drawTracked(const char* s, int cx, int y, int px, int track, uint16_
 // ---------------------------------------------------------------- key send ---
 static void sendEnter() { Keyboard.press(KEY_RETURN); delay(18); Keyboard.release(KEY_RETURN); }
 static void sendEsc()   { Keyboard.press(KEY_ESC);    delay(18); Keyboard.release(KEY_ESC); }
+// 回删一个字符(侧键轻点)
+static void sendBackspace() { Keyboard.press(KEY_BACKSPACE); delay(18); Keyboard.release(KEY_BACKSPACE); }
 
 // One click asks DSH to start or stop its own voice input (Ctrl+Alt+R).
 //
@@ -157,6 +161,7 @@ static void doAction(int a) {
     case ACT_CONFIRM: sendEnter(); break;
     case ACT_REJECT:  sendEsc();   break;
     case ACT_VOICE:   sendVoice(); break;
+    case ACT_BACKSPACE: sendBackspace(); break;
   }
   flashCard  = a;
   flashUntil = millis() + 550;
@@ -165,6 +170,7 @@ static void doAction(int a) {
              : (a == ACT_REJECT)  ? C_RED
              : C_BLUE;
   if (a == ACT_VOICE) pressColor = C_RED;
+  if (a == ACT_BACKSPACE) pressColor = C_AMBER;
 
   if (view == VIEW_APPROVAL) fullRepaint();
 }
@@ -312,6 +318,8 @@ void loop() {
       if (sideRecording) {
         sideRecording = false;
         doAction(ACT_VOICE);                     // 结束录音并转写
+      } else {
+        doAction(ACT_BACKSPACE);                 // 轻点 = 回删一个字符
       }
     }
   }
